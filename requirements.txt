@@ -1,2 +1,2 @@
-python-telegram-bot==20.7
-moviepy
+aiogram==3.4.1
+yt-dlp
