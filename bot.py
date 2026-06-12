@@ -1,34 +1,65 @@
+import asyncio
 import os
-from telegram import Update
-from telegram.ext import Application, MessageHandler, ContextTypes, filters
-from moviepy.editor import VideoFileClip
+import uuid
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import FSInputFile
+import yt_dlp
 
-TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("8724847696:AAGZoj7nPJceo8kVSIkxyU03ReVYNVQwvyA")
 
-async def video_to_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+bot = Bot(token=TOKEN)
+dp = Dispatcher()
+
+DOWNLOAD_FOLDER = "downloads"
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+
+
+def download_audio(url: str) -> str:
+    file_id = str(uuid.uuid4())
+
+    ydl_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": f"{DOWNLOAD_FOLDER}/{file_id}.%(ext)s",
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }
+        ],
+        "quiet": True,
+        "noplaylist": True,
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.extract_info(url, download=True)
+
+    return f"{DOWNLOAD_FOLDER}/{file_id}.mp3"
+
+
+@dp.message()
+async def handler(message: types.Message):
+    if not message.text or not message.text.startswith("http"):
+        await message.answer("Отправь ссылку на видео")
+        return
+
+    await message.answer("⏳ Скачиваю и конвертирую...")
+
     try:
-        if not update.message.video:
-            await update.message.reply_text("Отправь видео")
-            return
+        path = download_audio(message.text)
+        audio = FSInputFile(path)
 
-        video = await update.message.video.get_file()
+        await message.answer_audio(audio)
 
-        await video.download_to_drive("video.mp4")
-
-        clip = VideoFileClip("video.mp4")
-        clip.audio.write_audiofile("audio.mp3")
-        clip.close()
-
-        with open("audio.mp3", "rb") as f:
-            await update.message.reply_audio(f)
+        os.remove(path)
 
     except Exception as e:
-        await update.message.reply_text(str(e))
+        await message.answer(f"Ошибка: {e}")
 
-app = Application.builder().token(TOKEN).build()
 
-app.add_handler(
-    MessageHandler(filters.VIDEO, video_to_audio)
-)
+async def main():
+    await dp.start_polling(bot)
 
-app.run_polling()
+
+if __name__ == "__main__":
+    asyncio.run(main())
